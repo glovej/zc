@@ -37,18 +37,21 @@ import java.awt.event.InputEvent;
 public class MainFrame extends JFrame {
 
 	private JPanel contentPane;
-	private JTextField text_import;
-	private JTextField text_export;
-	private JTextField text_min;
-	private JTextField text_max;
-	private JTextField text_rows;
-	private String lastImportPath="";
-	private String lastExportPath="";
+	private JTextField text_import;   //导入文件
+	private JTextField text_export;   //导出文件
+	private JTextField text_min;      //最小范围
+	private JTextField text_max;      //最大范围
+	private JTextField text_rows;     //计算条目
+	private String lastImportPath=""; //保存导入文件浏览目录
+	private String lastExportPath=""; //保存导出文件浏览目录
 	
+	// 导入excel后保存的数据
 	public ArrayList<ArrayList<Object>> data = new ArrayList<ArrayList<Object>>();
+	// 准备写入的结果数据
 	public ArrayList<ArrayList<Object>> ans = new ArrayList<ArrayList<Object>>();
-	public ArrayList<Integer> exclude = new ArrayList<Integer>();
+	// 还未出结果过的行数
 	public ArrayList<Integer> include = new ArrayList<Integer>();
+	// 日志区
 	private JTextArea text_log;
 
 	/**
@@ -220,10 +223,6 @@ public class MainFrame extends JFrame {
 			public void actionPerformed(ActionEvent e) {
 				run();
 				ExcelUtil.writeExcel(ans, text_export.getText());
-//				run(text_import.getText(), text_export.getText(), 
-//						Double.parseDouble(text_min.getText()),
-//						Double.parseDouble(text_max.getText()),
-//						Integer.parseInt(text_rows.getText()));
 			}
 		});
 		button_2.setBounds(22, 339, 93, 23);
@@ -241,12 +240,14 @@ public class MainFrame extends JFrame {
 		loadConfig();
 	}
 	
+	// 读取excel文件的数据到arraylist中，使用的是网上别人提供的excel读写函数
 	public void readData()
 	{
 		reset();
 		String input = text_import.getText();
 		File file = new File(input);
 		data = ExcelUtil.readExcel(file);
+		// 以下为结果xls中的第一行抬头
 		ArrayList<Object> row = new ArrayList<Object>();
 		row.add("线路编号");
 		row.add("线路名称");
@@ -269,21 +270,22 @@ public class MainFrame extends JFrame {
 		include.clear();
 	}
 	
+	// 递归计算结果是否满足要求
 	public boolean calc(Path path, int count)
 	{
 		double min = Double.parseDouble(text_min.getText());
 		double max = Double.parseDouble(text_max.getText());
 		for (int i=0; i<include.size();i++)
 		{
-			//System.out.println("yes");
-			//System.out.println(include);
 			int row = include.get(i);
+			// 如果行已经在父函数中使用过了，就不要再尝试计算了，避免重复
 			if (path.used.contains(row))
 			{
 				continue;
 			}
 			double out = 0;
 			double in = 0;
+			// 如果解析出错，将出错行打印到日志中
 			try
 			{
 				out = Double.parseDouble((String)data.get(row).get(7));
@@ -297,8 +299,10 @@ public class MainFrame extends JFrame {
 			}
 			path.outsum += out;
 			path.insum += in;
+			//表示已经到达指定个数，需要比较结果
 			if (count==1)
 			{
+				//分母为零就跳过吧
 				if (path.insum == 0)
 				{
 				
@@ -307,9 +311,11 @@ public class MainFrame extends JFrame {
 				{
 					path.retsum = path.outsum / path.insum;
 					//System.out.println(path.retsum);
+					//以下为满足条件的判断 
 					if (path.retsum >= min && path.retsum <= max)
 					{
 						path.used.add(row);
+						//已经出结果了，可以把include里的相关条目去除
 						include.removeAll(path.used);
 						for (int j=0; j<path.used.size() ; j++)
 						{
@@ -327,19 +333,9 @@ public class MainFrame extends JFrame {
 							}
 							ans.add(newrow1);
 						}
-						/*
-						ArrayList<Object> newrow4 = new ArrayList<Object>();
-						newrow4.add("总计");
-						newrow4.add("");
-						newrow4.add(2, path.outsum);
-						newrow4.add(3, path.insum);
-						newrow4.add(4,path.retsum);
-						ans.add(newrow4);
-						ArrayList<Object> newrow5 = new ArrayList<Object>();
-						ans.add(newrow5);
-						*/
 						return true;
 					}
+					//不满足条件，把统计值还原，继续循环下一行
 					else
 					{
 						path.retsum = 0;
@@ -348,16 +344,21 @@ public class MainFrame extends JFrame {
 						continue;
 					}
 				}
+				//循环结束也不满足条件，就返回失败，让递归上层函数处理
 				return false;
 			}
+			//如果还没到递归底层
 			else
 			{
+				//先将路径添加上
 				path.used.add(row);
+				//根据下层递归函数的值来处理，如果下层返回成功，表示已经找到一条记录，整个递归可以结束 
 				boolean ret = calc(path, count - 1);
 				if (ret)
 				{
 					return true;
 				}
+				//否则还原统计和路径，继续循环计算，直到找到或者循环结束为止
 				path.retsum = 0;
 				path.outsum -= out;
 				path.insum -= in;
@@ -365,6 +366,7 @@ public class MainFrame extends JFrame {
 				continue;
 			}
 		}
+		//如果一个结果也找不到，返回失败
 		return false;
 	}
 	
@@ -375,13 +377,16 @@ public class MainFrame extends JFrame {
 		addlog("读取数据完成，正在计算");
 		int count = Integer.parseInt(text_rows.getText());
 		Path path = new Path();
+		//每次calc，预期得到一个结果，并且include里清除对应的行数。如果得不到结果了，表示全部计算完成了
 		while (calc(path, count))
 		{
+			//path需要重新生成，以避免原来的统计项有干扰
 			path = new Path();
 		}
 		addlog("执行完成");
 	}
 	
+	// 添加日志，日志头部为时间戳
 	public void addlog(String str) {
 		TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));// 定义时区，可以避免虚拟机时间与系统时间不一致的问题
 		Date nowTime = new Date();
@@ -392,101 +397,11 @@ public class MainFrame extends JFrame {
 		getText_log().setText(newstr);
 	}
 	
-	public void run(String input, String output, double min, double max, int calcrows)
-	{
-		
-		int rows=1;
-		
-		boolean back = false;
-	
-		for(int i=1; i<data.size(); i++)
-		{
-			if (exclude.contains(i))
-			{
-				continue;
-			}
-			//System.out.println(result.get(i).get(6));
-			for (int j=i+1; j<data.size(); j++)
-			{
-				if (exclude.contains(j))
-				{
-					continue;
-				}
-				for (int k=j+1; k<data.size(); k++)
-				{
-					if (exclude.contains(k))
-					{
-						continue;
-					}
-					double out1 = Double.valueOf((String)((data.get(i).get(7))));
-					double out2 = Double.valueOf((String)((data.get(j).get(7))));
-					double out3 = Double.valueOf((String)((data.get(k).get(7))));
-					double out = out1 + out2 + out3;
-					double in1 = Double.valueOf((String)((data.get(i).get(8))));
-					double in2 = Double.valueOf((String)((data.get(j).get(8))));
-					double in3 = Double.valueOf((String)((data.get(k).get(8))));
-					double in = in1 + in2 + in3;
-					double r = out / in;
-					
-					if (min<=r && r<=max)
-					{
-						ArrayList<Object> newrow1 = new ArrayList<Object>();
-						newrow1.add(data.get(i).get(0));
-						newrow1.add(data.get(i).get(1));
-						newrow1.add(data.get(i).get(7));
-						newrow1.add(data.get(i).get(8));
-						ans.add(newrow1);
-						ArrayList<Object> newrow2 = new ArrayList<Object>();
-						newrow2.add(data.get(j).get(0));
-						newrow2.add(data.get(j).get(1));
-						newrow2.add(data.get(j).get(7));
-						newrow2.add(data.get(j).get(8));
-						ans.add(newrow2);
-						ArrayList<Object> newrow3 = new ArrayList<Object>();
-						newrow3.add(data.get(k).get(0));
-						newrow3.add(data.get(k).get(1));
-						newrow3.add(data.get(k).get(7));
-						newrow3.add(data.get(k).get(8));
-						ans.add(newrow3);
-						ArrayList<Object> newrow4 = new ArrayList<Object>();
-						newrow4.add("总计");
-						newrow4.add("");
-						newrow4.add(2, out);
-						newrow4.add(3, in);
-						newrow4.add(4,r);
-						ans.add(newrow4);
-						ArrayList<Object> newrow5 = new ArrayList<Object>();
-						ans.add(newrow5);
-						
-						rows += 5;
-						exclude.add(i);
-						exclude.add(j);
-						exclude.add(k);
-						if (rows>=60000)
-						{
-							ExcelUtil.writeExcel(ans, output);
-							return;
-						}
-						System.out.println(rows);
-						break;
-					}
-				}
-				if (exclude.contains(j))
-				{
-					break;
-				}
-			}
-			if (exclude.contains(i))
-			{
-				continue;
-			}
-		}
-		ExcelUtil.writeExcel(ans, output);
-	}
 	public JTextArea getText_log() {
 		return text_log;
 	}
 	
+	//保存配置
 	public void saveConfig()
 	{
 		OutputStream fos;
@@ -515,6 +430,7 @@ public class MainFrame extends JFrame {
 		addlog("保存配置完毕");
 	}
 	
+	//读取配置
 	public void loadConfig()
 	{
 		Properties props = new Properties(); 
