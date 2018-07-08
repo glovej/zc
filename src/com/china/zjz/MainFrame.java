@@ -251,6 +251,7 @@ public class MainFrame extends JFrame {
 		ArrayList<Object> row = new ArrayList<Object>();
 		row.add("线路编号");
 		row.add("线路名称");
+		row.add("变电站名称");
 		row.add("损失电量");
 		row.add("输入电量");
 		row.add("总损失电量");
@@ -323,6 +324,7 @@ public class MainFrame extends JFrame {
 							int currow= path.used.get(j);
 							newrow1.add(data.get(currow).get(0));
 							newrow1.add(data.get(currow).get(1));
+							newrow1.add(data.get(currow).get(3));
 							newrow1.add(data.get(currow).get(7));
 							newrow1.add(data.get(currow).get(8));
 							if (j == path.used.size() - 1)
